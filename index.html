@@ -1,0 +1,943 @@
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CineContract Studio - Automated Film Legal Engine & PDF Generator</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- html2pdf.js for client-side PDF compilation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#fbf7ee',
+              100: '#f5ecd6',
+              500: '#c59a3f',
+              600: '#a87e2b',
+              700: '#87621e',
+              900: '#14120e',
+            },
+            slate: {
+              850: '#111827',
+              900: '#0b0f19',
+              950: '#060911',
+            }
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            serif: ['"EB Garamond"', 'serif'],
+            display: ['"Cinzel"', 'serif'],
+            mono: ['"Courier Prime"', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #c59a3f;
+    }
+
+    /* Print & Document Styles */
+    .document-page {
+      background: #ffffff;
+      color: #1a1a1a;
+      box-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0,0,0,0.08);
+      width: 210mm;
+      min-height: 297mm;
+      padding: 22mm 24mm;
+      margin: 0 auto;
+      position: relative;
+      font-size: 11pt;
+      line-height: 1.55;
+      box-sizing: border-box;
+    }
+
+    .contract-clause-num {
+      font-weight: 700;
+      color: #111;
+    }
+
+    .signature-pad-canvas {
+      touch-action: none;
+      background: #ffffff;
+      cursor: crosshair;
+    }
+
+    /* Watermark styling */
+    .draft-watermark {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-35deg);
+      font-size: 8rem;
+      font-weight: 900;
+      color: rgba(180, 180, 180, 0.12);
+      pointer-events: none;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      z-index: 10;
+      user-select: none;
+    }
+
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #printable-document, #printable-document * {
+        visibility: visible;
+      }
+      #printable-document {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        margin: 0;
+        padding: 15mm;
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen flex flex-col selection:bg-brand-500 selection:text-white">
+
+  <!-- TOP NAVBAR -->
+  <header class="bg-slate-900/90 backdrop-blur border-b border-slate-800 sticky top-0 z-40 px-4 lg:px-8 py-3.5 flex items-center justify-between">
+    <div class="flex items-center space-x-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 via-brand-500 to-amber-200 flex items-center justify-center text-slate-950 font-black text-xl shadow-lg shadow-brand-500/20">
+        <i class="fa-solid fa-clapperboard"></i>
+      </div>
+      <div>
+        <div class="flex items-center space-x-2">
+          <span class="font-display font-bold text-lg tracking-wider text-white">CINECONTRACT</span>
+          <span class="bg-brand-500/20 text-brand-500 text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded border border-brand-500/30">PRO STUDIO</span>
+        </div>
+        <p class="text-xs text-slate-400 hidden sm:block">Automated Film Production Contracts & Legal Clearance Engine</p>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex items-center space-x-2 sm:space-x-3">
+      <button id="btn-quick-sample" onclick="loadSampleData()" class="hidden md:flex items-center space-x-2 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white px-3 py-2 rounded-lg transition border border-slate-700">
+        <i class="fa-solid fa-wand-magic-sparkles text-brand-500"></i>
+        <span>Load Sample Data</span>
+      </button>
+
+      <button id="btn-print" onclick="window.print()" class="flex items-center space-x-2 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-lg transition border border-slate-700">
+        <i class="fa-solid fa-print"></i>
+        <span class="hidden sm:inline">Print</span>
+      </button>
+
+      <button id="btn-export-pdf" onclick="generatePDF()" class="flex items-center space-x-2 text-xs sm:text-sm font-bold bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-amber-400 text-slate-950 px-4 py-2 rounded-lg transition shadow-md shadow-brand-500/20 active:scale-95">
+        <i class="fa-solid fa-file-pdf"></i>
+        <span>Export Official PDF</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN APP CONTAINER -->
+  <main class="flex-1 grid grid-cols-1 xl:grid-cols-12 overflow-hidden min-h-[calc(100vh-65px)]">
+
+    <!-- LEFT CONFIGURATOR PANEL (5 cols) -->
+    <div class="xl:col-span-5 bg-slate-900 border-r border-slate-800 flex flex-col h-full overflow-y-auto">
+      
+      <!-- Template Selector Tab Bar -->
+      <div class="p-4 border-b border-slate-800 bg-slate-900/60 sticky top-0 z-20 backdrop-blur">
+        <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Select Contract Type / License</label>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2" id="template-tabs">
+          <button type="button" onclick="setContractType('actor_release')" data-type="actor_release" class="tab-btn active text-left p-2.5 rounded-lg border text-xs font-semibold transition bg-brand-500/10 border-brand-500 text-brand-500">
+            <i class="fa-solid fa-user-tie block mb-1 text-sm"></i> Actor / Talent Release
+          </button>
+          <button type="button" onclick="setContractType('location_agreement')" data-type="location_agreement" class="tab-btn text-left p-2.5 rounded-lg border text-xs font-semibold transition bg-slate-800/60 border-slate-700 text-slate-300 hover:border-slate-500">
+            <i class="fa-solid fa-building block mb-1 text-sm"></i> Location Agreement
+          </button>
+          <button type="button" onclick="setContractType('music_sync')" data-type="music_sync" class="tab-btn text-left p-2.5 rounded-lg border text-xs font-semibold transition bg-slate-800/60 border-slate-700 text-slate-300 hover:border-slate-500">
+            <i class="fa-solid fa-music block mb-1 text-sm"></i> Music Sync License
+          </button>
+          <button type="button" onclick="setContractType('crew_deal')" data-type="crew_deal" class="tab-btn text-left p-2.5 rounded-lg border text-xs font-semibold transition bg-slate-800/60 border-slate-700 text-slate-300 hover:border-slate-500">
+            <i class="fa-solid fa-video block mb-1 text-sm"></i> Crew Deal Memo
+          </button>
+          <button type="button" onclick="setContractType('writer_option')" data-type="writer_option" class="tab-btn text-left p-2.5 rounded-lg border text-xs font-semibold transition bg-slate-800/60 border-slate-700 text-slate-300 hover:border-slate-500">
+            <i class="fa-solid fa-pen-nib block mb-1 text-sm"></i> Writer Option/Acquisition
+          </button>
+          <button type="button" onclick="setContractType('nda')" data-type="nda" class="tab-btn text-left p-2.5 rounded-lg border text-xs font-semibold transition bg-slate-800/60 border-slate-700 text-slate-300 hover:border-slate-500">
+            <i class="fa-solid fa-shield-halved block mb-1 text-sm"></i> Film NDA / Confidential
+          </button>
+        </div>
+      </div>
+
+      <!-- Live Form Fields -->
+      <form id="contract-form" class="p-4 sm:p-6 space-y-6 text-sm" oninput="updateContractPreview()">
+
+        <!-- Section: General Project Metadata -->
+        <div class="bg-slate-950/60 rounded-xl p-4 border border-slate-800/80">
+          <h3 class="font-bold text-slate-200 text-xs uppercase tracking-wider mb-3 flex items-center text-brand-500">
+            <i class="fa-solid fa-film mr-2"></i> Project & Production Information
+          </h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="sm:col-span-2">
+              <label class="block text-[11px] text-slate-400 mb-1 font-medium">Production / Film Title ("Project")</label>
+              <input type="text" id="film_title" value="CHRONICLES OF DUSK" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 text-xs">
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1 font-medium">Production Company / Producer</label>
+              <input type="text" id="company_name" value="Apex Horizon Pictures LLC" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-brand-500 text-xs">
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1 font-medium">Producer Representative / Signer</label>
+              <input type="text" id="producer_rep" value="Marcus Vance (Executive Producer)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-brand-500 text-xs">
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1 font-medium">Agreement Date</label>
+              <input type="date" id="effective_date" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-brand-500 text-xs">
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1 font-medium">Governing Jurisdiction (State/Country)</label>
+              <input type="text" id="jurisdiction" value="State of California, County of Los Angeles" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-brand-500 text-xs">
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Grantor / Counterparty Details -->
+        <div class="bg-slate-950/60 rounded-xl p-4 border border-slate-800/80">
+          <h3 class="font-bold text-slate-200 text-xs uppercase tracking-wider mb-3 flex items-center text-brand-500">
+            <i class="fa-solid fa-id-card mr-2"></i> Counterparty / Talent / Licensor Information
+          </h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="sm:col-span-2">
+              <label id="label_party_name" class="block text-[11px] text-slate-400 mb-1 font-medium">Legal Name of Talent / Owner</label>
+              <input type="text" id="counterparty_name" value="Elena Rostova" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-brand-500 text-xs">
+            </div>
+            <div>
+              <label id="label_party_role" class="block text-[11px] text-slate-400 mb-1 font-medium">Role / Character / Asset Spec</label>
+              <input type="text" id="party_role" value="Lead Role ('Commander Valeria')" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-brand-500 text-xs">
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1 font-medium">Email / Phone</label>
+              <input type="text" id="party_contact" value="elena@talentmgmt-agency.com | +1 (310) 555-0198" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-brand-500 text-xs">
+            </div>
+            <div class="sm:col-span-2">
+              <label class="block text-[11px] text-slate-400 mb-1 font-medium">Full Physical Address</label>
+              <input type="text" id="party_address" value="442 Sunset Boulevard, Suite 800, Beverly Hills, CA 90210" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-brand-500 text-xs">
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Specific Compensation & Rights -->
+        <div class="bg-slate-950/60 rounded-xl p-4 border border-slate-800/80">
+          <h3 class="font-bold text-slate-200 text-xs uppercase tracking-wider mb-3 flex items-center text-brand-500">
+            <i class="fa-solid fa-file-invoice-dollar mr-2"></i> Compensation, Territory & Key Terms
+          </h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1 font-medium">Agreed Fee / Consideration</label>
+              <input type="text" id="compensation" value="$12,500.00 USD (Pay or Play flat fee)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-brand-500 text-xs">
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1 font-medium">Territory Granted</label>
+              <input type="text" id="territory" value="Worldwide, Universe in perpetuity" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-brand-500 text-xs">
+            </div>
+            <div class="sm:col-span-2">
+              <label class="block text-[11px] text-slate-400 mb-1 font-medium">Screen Credit / Billing Format</label>
+              <input type="text" id="credit_billing" value="Main Title / On-Screen Single Card 'and starring ELENA ROSTOVA'" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-brand-500 text-xs">
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Dynamic Clauses Toggles -->
+        <div class="bg-slate-950/60 rounded-xl p-4 border border-slate-800/80">
+          <h3 class="font-bold text-slate-200 text-xs uppercase tracking-wider mb-3 flex items-center text-brand-500">
+            <i class="fa-solid fa-list-check mr-2"></i> Standard & Custom Protective Clauses
+          </h3>
+          <div class="space-y-2.5">
+            <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" id="clause_work_for_hire" checked class="rounded border-slate-700 text-brand-500 focus:ring-0">
+              <span><strong>Work-For-Hire / Full Assignment:</strong> Producer retains sole copyright ownership.</span>
+            </label>
+            <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" id="clause_promotional_rights" checked class="rounded border-slate-700 text-brand-500 focus:ring-0">
+              <span><strong>Name, Image & Likeness:</strong> Right to use for marketing, trailers, & behind-the-scenes.</span>
+            </label>
+            <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" id="clause_no_injunction" checked class="rounded border-slate-700 text-brand-500 focus:ring-0">
+              <span><strong>No Injunctive Relief:</strong> Counterparty damages limited to monetary remedy only.</span>
+            </label>
+            <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" id="clause_confidentiality" checked class="rounded border-slate-700 text-brand-500 focus:ring-0">
+              <span><strong>Strict Non-Disclosure / Social Media Embargo:</strong> Prohibits leaks & unauthorized posts.</span>
+            </label>
+            <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" id="clause_force_majeure" checked class="rounded border-slate-700 text-brand-500 focus:ring-0">
+              <span><strong>Force Majeure & Production Cancellation:</strong> Protection against acts of God/weather.</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Section: Interactive Digital Signature Pad -->
+        <div class="bg-slate-950/60 rounded-xl p-4 border border-slate-800/80">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="font-bold text-slate-200 text-xs uppercase tracking-wider flex items-center text-brand-500">
+              <i class="fa-solid fa-signature mr-2"></i> Digital Signature Draw
+            </h3>
+            <button type="button" onclick="clearSignature()" class="text-[11px] text-red-400 hover:text-red-300 font-medium">
+              <i class="fa-solid fa-eraser mr-1"></i>Clear Pad
+            </button>
+          </div>
+          <p class="text-[11px] text-slate-400 mb-2">Draw counterparty / talent legal sign-off directly below:</p>
+          <div class="border border-slate-700 rounded-lg overflow-hidden bg-white">
+            <canvas id="signature-pad" width="450" height="120" class="signature-pad-canvas w-full"></canvas>
+          </div>
+          <div class="flex items-center justify-between mt-2">
+            <span class="text-[10px] text-slate-500"><i class="fa-solid fa-lock mr-1"></i>Encrypted Canvas Stamp Ready</span>
+            <button type="button" onclick="applySampleSignature()" class="text-[11px] text-brand-500 hover:underline">
+              Insert Sample Signature
+            </button>
+          </div>
+        </div>
+
+        <!-- PDF Options (Watermark, Seal, Reference No) -->
+        <div class="bg-slate-950/60 rounded-xl p-4 border border-slate-800/80">
+          <h3 class="font-bold text-slate-200 text-xs uppercase tracking-wider mb-2 flex items-center text-brand-500">
+            <i class="fa-solid fa-stamp mr-2"></i> Document Stamps & Options
+          </h3>
+          <div class="grid grid-cols-2 gap-3 text-xs">
+            <label class="flex items-center space-x-2 text-slate-300 cursor-pointer">
+              <input type="checkbox" id="show_watermark" onchange="updateContractPreview()" class="rounded border-slate-700 text-brand-500 focus:ring-0">
+              <span>Show "DRAFT" Watermark</span>
+            </label>
+            <label class="flex items-center space-x-2 text-slate-300 cursor-pointer">
+              <input type="checkbox" id="show_seal" checked onchange="updateContractPreview()" class="rounded border-slate-700 text-brand-500 focus:ring-0">
+              <span>Formal Studio Seal Stamp</span>
+            </label>
+          </div>
+        </div>
+
+      </form>
+    </div>
+
+    <!-- RIGHT PREVIEW CANVAS (7 cols) -->
+    <div class="xl:col-span-7 bg-slate-950 flex flex-col h-full overflow-hidden">
+      <!-- Toolbar -->
+      <div class="p-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400">
+        <div class="flex items-center space-x-3">
+          <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span>
+            Realtime Legal Document Preview
+          </span>
+          <span class="text-slate-500 hidden sm:inline">| Standard A4 Format (210 × 297 mm)</span>
+        </div>
+        <div class="flex items-center space-x-2">
+          <button onclick="zoomPreview(0.9)" class="p-1.5 hover:text-white rounded bg-slate-800 border border-slate-700" title="Zoom Out"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+          <span id="zoom-level" class="text-[11px] font-mono px-1">100%</span>
+          <button onclick="zoomPreview(1.1)" class="p-1.5 hover:text-white rounded bg-slate-800 border border-slate-700" title="Zoom In"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+          <button onclick="resetZoom()" class="p-1.5 hover:text-white rounded bg-slate-800 border border-slate-700 text-[10px]" title="Reset Zoom">Fit</button>
+        </div>
+      </div>
+
+      <!-- Preview Scrollable Area -->
+      <div id="preview-viewport" class="flex-1 overflow-y-auto p-4 sm:p-8 flex justify-center bg-slate-950/80 backdrop-blur-sm">
+        
+        <!-- DOCUMENT CONTAINER TO EXPORT (Rendered Parchment Look) -->
+        <div id="document-zoom-wrapper" class="transition-transform duration-150 origin-top">
+          <div id="printable-document" class="document-page font-serif">
+            
+            <!-- Draft Watermark (Conditional) -->
+            <div id="doc-draft-watermark" class="draft-watermark hidden">DRAFT</div>
+
+            <!-- HEADER / STUDIO CREST -->
+            <div class="border-b-2 border-slate-900 pb-4 mb-6 flex justify-between items-end">
+              <div>
+                <p class="font-display text-xs tracking-widest text-slate-500 uppercase" id="doc-header-studio">APEX HORIZON PICTURES LEGAL DEPARTMENT</p>
+                <h1 class="font-display text-xl sm:text-2xl font-bold tracking-tight text-slate-900 mt-0.5" id="doc-contract-title">ACTOR / TALENT RELEASE AGREEMENT</h1>
+                <p class="text-[10pt] italic text-slate-600 font-sans mt-0.5">Motion Picture Title: "<span class="font-bold text-slate-900" id="doc-film-title">CHRONICLES OF DUSK</span>"</p>
+              </div>
+              <div class="text-right hidden sm:block">
+                <div class="font-mono text-[9pt] text-slate-500" id="doc-ref-number">DOC REF: CC-2025-089X</div>
+                <div class="font-mono text-[9pt] text-slate-500">DATE: <span id="doc-date">October 24, 2025</span></div>
+              </div>
+            </div>
+
+            <!-- PREAMBLE -->
+            <div class="mb-5 text-[10.5pt] leading-relaxed text-justify">
+              <p>
+                This Agreement (the <strong>"Agreement"</strong>) is entered into as of 
+                <span class="underline font-semibold" id="doc-intro-date">October 24, 2025</span> (the <strong>"Effective Date"</strong>), 
+                by and between <strong id="doc-intro-company">Apex Horizon Pictures LLC</strong>, having its principal office and production entity (hereinafter referred to as <strong>"Producer"</strong>), 
+                and <strong id="doc-intro-counterparty">Elena Rostova</strong>, residing at <span id="doc-intro-address">442 Sunset Boulevard, Suite 800, Beverly Hills, CA 90210</span> (hereinafter referred to as <strong>"<span id="doc-intro-party-title">Talent</span>"</strong>).
+              </p>
+            </div>
+
+            <!-- RECITALS -->
+            <div class="mb-4 text-[10pt] italic bg-slate-50 p-2.5 rounded border border-slate-200">
+              <p><strong>WITNESSETH:</strong> WHEREAS, Producer intends to produce, finance, distribute, and exploit a feature-length or episodic motion picture tentatively titled <em>"<span id="doc-recital-title">CHRONICLES OF DUSK</span>"</em> (the "Project"); and WHEREAS, Producer desires to engage or license certain rights, appearances, or assets from <span id="doc-recital-counterparty">Talent</span>, and <span id="doc-recital-counterparty-2">Talent</span> agrees to provide such services or rights subject to the terms hereof;</p>
+            </div>
+
+            <!-- DYNAMIC LEGAL CLAUSES -->
+            <div id="doc-clauses-container" class="space-y-4 text-[10pt] leading-normal text-justify">
+              
+              <!-- Clause 1: Engagement & Grant of Rights -->
+              <div>
+                <p>
+                  <span class="contract-clause-num">1. ENGAGEMENT & GRANT OF RIGHTS.</span> 
+                  <span id="doc-clause-1-content">
+                    Talent hereby grants to Producer, its successors, licensees, and assigns, the irrevocable, perpetual, exclusive right throughout the <strong>Universe</strong> in all media now known or hereafter devised, to photograph, record, reproduce, alter, and syndicate Talent’s performance, voice, name, persona, and likeness in connection with the Project and in all advertising, publicity, promotion, and commercial tie-ins thereof.
+                  </span>
+                </p>
+              </div>
+
+              <!-- Clause 2: Consideration & Payment -->
+              <div>
+                <p>
+                  <span class="contract-clause-num">2. COMPENSATION & REIMBURSEMENT.</span> 
+                  As full and complete consideration for all rights granted, services rendered, and covenants made herein, Producer shall pay to <span id="doc-clause-2-counterparty">Talent</span> the total amount of 
+                  <strong class="underline" id="doc-clause-compensation">$12,500.00 USD (Pay or Play flat fee)</strong>, payable in according with standard industry union / production payroll milestones upon successful delivery and signature.
+                </p>
+              </div>
+
+              <!-- Clause 3: Screen Credit -->
+              <div>
+                <p>
+                  <span class="contract-clause-num">3. CREDIT & BILLING.</span> 
+                  Subject to Talent's customary performance of all obligations and timely presence on set, Producer shall accord Talent credit on the finished Project as follows: 
+                  <strong id="doc-clause-credit">Main Title / On-Screen Single Card 'and starring ELENA ROSTOVA'</strong>. All aspects of size, prominence, and placement shall be at Producer’s sole artistic discretion, unless strictly stipulated otherwise herein.
+                </p>
+              </div>
+
+              <!-- Clause 4: Work Made for Hire (Conditional Checkbox) -->
+              <div id="doc-c-workforhire">
+                <p>
+                  <span class="contract-clause-num">4. WORK-MADE-FOR-HIRE & COPYRIGHT ASSIGNMENT.</span> 
+                  Talent explicitly acknowledges and agrees that all results and proceeds of Talent’s services hereunder shall constitute a "work-made-for-hire" for Producer under the United States Copyright Act (17 U.S.C. § 101 et seq.) and corresponding international treaties. Producer is the sole and exclusive author and owner of all copyrights, trademarks, distribution rights, and derivative spin-offs throughout perpetuity.
+                </p>
+              </div>
+
+              <!-- Clause 5: Likeness & Promotion (Conditional Checkbox) -->
+              <div id="doc-c-likeness">
+                <p>
+                  <span class="contract-clause-num">5. PROMOTION & MERCHANDISING.</span> 
+                  Producer possesses the unrestricted right to utilize Talent’s biography, still portraits, voice recordings, and behind-the-scenes footage in connection with the worldwide distribution, exhibition, streaming, physical media, advertising, film festivals, and press junkets of the Project.
+                </p>
+              </div>
+
+              <!-- Clause 6: Waiver of Injunctive Relief -->
+              <div id="doc-c-injunction">
+                <p>
+                  <span class="contract-clause-num">6. LIMITATION OF REMEDIES (NO INJUNCTION).</span> 
+                  In the event of any alleged default, breach, or violation of this Agreement by Producer, Talent’s sole and exclusive remedy shall be an action at law for monetary damages actually incurred. In no event shall Talent be entitled to rescind, terminate, enjoin, or restrain the development, production, exhibition, distribution, advertising, or marketing of the Project.
+                </p>
+              </div>
+
+              <!-- Clause 7: Confidentiality & Social Media -->
+              <div id="doc-c-confidentiality">
+                <p>
+                  <span class="contract-clause-num">7. STRICT CONFIDENTIALITY & EMBARGO.</span> 
+                  Talent shall maintain strictly confidential all non-public screenplay details, plot elements, costume designs, photographs, production schedules, and trade secrets. Talent shall not publish, tweet, post, or broadcast any photography, audio, or commentary on social media channels without Producer's prior written authorization.
+                </p>
+              </div>
+
+              <!-- Clause 8: Governing Law -->
+              <div>
+                <p>
+                  <span class="contract-clause-num">8. GOVERNING LAW & ARBITRATION.</span> 
+                  This Agreement shall be governed by, construed, and enforced in accordance with the laws of 
+                  <strong id="doc-clause-jurisdiction">State of California, County of Los Angeles</strong>. Any dispute arising under or in relation to this document shall be submitted to binding arbitration before JAMS or the American Arbitration Association in accordance with entertainment industry arbitration rules.
+                </p>
+              </div>
+
+            </div>
+
+            <!-- SIGNATURE BLOCK -->
+            <div class="mt-8 pt-4 border-t-2 border-slate-900 break-inside-avoid">
+              <p class="text-[9pt] uppercase tracking-wider font-bold mb-4 text-slate-800">
+                IN WITNESS WHEREOF, the parties hereto have executed this Agreement as of the Effective Date written above.
+              </p>
+
+              <div class="grid grid-cols-2 gap-8 items-end">
+                
+                <!-- Producer Signature Box -->
+                <div>
+                  <div class="h-16 border-b border-slate-900 flex items-end pb-1">
+                    <span class="font-display italic text-lg text-slate-800" id="doc-sig-producer-name">Marcus Vance</span>
+                  </div>
+                  <div class="mt-1 text-[9pt]">
+                    <p class="font-bold text-slate-900" id="doc-sig-company-label">PRODUCER: Apex Horizon Pictures LLC</p>
+                    <p class="text-slate-600" id="doc-sig-producer-title">By: Marcus Vance, Executive Producer</p>
+                    <p class="text-slate-500 font-mono text-[8pt]" id="doc-sig-producer-date">Date: Current</p>
+                  </div>
+                </div>
+
+                <!-- Talent / Counterparty Signature Box -->
+                <div>
+                  <div class="h-16 border-b border-slate-900 relative flex items-end pb-1">
+                    <img id="doc-sig-counterparty-img" src="" alt="" class="max-h-14 max-w-full absolute bottom-1 left-0 object-contain hidden">
+                    <span id="doc-sig-placeholder" class="font-display italic text-lg text-slate-700">Elena Rostova</span>
+                  </div>
+                  <div class="mt-1 text-[9pt]">
+                    <p class="font-bold text-slate-900" id="doc-sig-counterparty-name">TALENT: Elena Rostova</p>
+                    <p class="text-slate-600" id="doc-sig-counterparty-role">Role: Lead Role ('Commander Valeria')</p>
+                    <p class="text-slate-500 font-mono text-[8pt]" id="doc-sig-counterparty-date">Date: Current</p>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- Official Seal & Barcode Verification Footer -->
+              <div class="mt-8 pt-3 border-t border-slate-200 flex justify-between items-center text-[8pt] text-slate-500 font-mono">
+                <div class="flex items-center space-x-3">
+                  <div id="doc-seal-badge" class="w-8 h-8 rounded-full border border-brand-600 flex items-center justify-center text-brand-600 font-bold text-[9px]">
+                    <i class="fa-solid fa-stamp"></i>
+                  </div>
+                  <div>
+                    <span>CERTIFIED ENTERTAINMENT LEGAL DRAFT</span><br>
+                    <span>DIGITAL HASH: <span id="doc-digital-hash">SHA256:7f8a9e...4b12</span></span>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <span>Page 1 of 1 &bull; Industry Standard Release</span><br>
+                  <span>CineContract Studio Pro v2.4</span>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    // State management
+    let currentContractType = 'actor_release';
+    let currentZoom = 1.0;
+    let isDrawing = false;
+
+    // Canvas Signature Pad Elements
+    const canvas = document.getElementById('signature-pad');
+    const ctx = canvas.getContext('2d');
+
+    // Contract Templates Schema
+    const contractTemplates = {
+      actor_release: {
+        title: "ACTOR / TALENT RELEASE AGREEMENT",
+        partyRoleLabel: "Role / Character Name",
+        partyRoleDefault: "Lead Role ('Commander Valeria')",
+        partyTitle: "Talent",
+        c1: "Talent hereby grants to Producer, its successors, licensees, and assigns, the irrevocable, perpetual, exclusive right throughout the <strong>Universe</strong> in all media now known or hereafter devised, to photograph, record, reproduce, alter, and syndicate Talent’s performance, voice, name, persona, and likeness in connection with the Project and in all advertising, publicity, promotion, and commercial tie-ins thereof.",
+        creditDefault: "Main Title / On-Screen Single Card 'and starring ELENA ROSTOVA'",
+        compDefault: "$12,500.00 USD (Pay or Play flat fee)"
+      },
+      location_agreement: {
+        title: "LOCATION RELEASE & USE AGREEMENT",
+        partyRoleLabel: "Property Description & Address",
+        partyRoleDefault: "The Grand Industrial Warehouse, 980 River Rd, Dock 4",
+        partyTitle: "Property Owner / Licensor",
+        c1: "Owner hereby grants to Producer and its crew, equipment, and actors the exclusive license to enter upon, photograph, film, and utilize the designated Real Property for the purposes of principal photography of the Project, including the right to bring generator trucks, lighting rigs, and set dressings on the dates stipulated.",
+        creditDefault: "Special Thanks to: The Grand Industrial Warehouse Management",
+        compDefault: "$4,500.00 USD per 12-hour shooting day + $1,000 security deposit"
+      },
+      music_sync: {
+        title: "MUSIC SYNCHRONIZATION & MASTER USE LICENSE",
+        partyRoleLabel: "Musical Composition & Track Title",
+        partyRoleDefault: "'Midnight Resonance' (Written & Recorded by Licensor)",
+        partyTitle: "Licensor / Rights Holder",
+        c1: "Licensor hereby grants to Producer the non-exclusive, irrevocable, worldwide sync and master license to synchronize, reproduce, edit, perform, and incorporate the Master Recording and underlying Musical Composition in timed relation with the motion picture Project across all distribution channels (Theatrical, VOD, Streaming, Broadcast).",
+        creditDefault: "End Crawl: 'Midnight Resonance' Performed by Elena Rostova, Courtesy of Licensor",
+        compDefault: "$3,000.00 USD Synchronisation Fee (Worldwide, all media, in perpetuity)"
+      },
+      crew_deal: {
+        title: "KEY CREW DEAL MEMORANDUM & WORK-FOR-HIRE",
+        partyRoleLabel: "Crew Position / Department",
+        partyRoleDefault: "Director of Photography (Cinematographer)",
+        partyTitle: "Employee / Technician",
+        c1: "Crew Member is hereby engaged to render exclusive production services as indicated for the preparation, shooting, and wrap phases of the Project. Crew Member agrees to adhere to call sheets, safety guidelines, union/safety regulations, and producer directions.",
+        creditDefault: "Director of Photography: Individual Card in Main Titles",
+        compDefault: "$950.00 USD / Day (10-hr guarantee) + $150/day Camera Kit Rental"
+      },
+      writer_option: {
+        title: "LITERARY MATERIAL OPTION & PURCHASE AGREEMENT",
+        partyRoleLabel: "Screenplay Title / WGA Registry #",
+        partyRoleDefault: "'DUSKHORIZON' (Original Spec Script, WGA #209931)",
+        partyTitle: "Author / Screenwriter",
+        c1: "Author hereby grants to Producer the exclusive and irrevocable 18-month Option to acquire all motion picture, television, streaming, sequel, and ancillary audio-visual rights in and to the literary work, with the right to extend the option period upon written notice.",
+        creditDefault: "Screenplay By / Story By: Elena Rostova (In accordance with WGA standards)",
+        compDefault: "Initial Option Fee: $5,000.00 USD | Purchase Price: $65,000.00 USD upon Principal Photography"
+      },
+      nda: {
+        title: "FILM PRODUCTION NON-DISCLOSURE & PROPRIETARY AGREEMENT",
+        partyRoleLabel: "Capacity / Project Relationship",
+        partyRoleDefault: "Prospective Key Cast / Investor / Production Consultant",
+        partyTitle: "Recipient",
+        c1: "Recipient agrees that all screenplays, treatments, casting lists, budget figures, VFX techniques, and production designs disclosed by Producer constitute strict confidential information. Recipient will not disclose or publish any portion thereof to any third party without express written permission.",
+        creditDefault: "N/A - Confidentiality / Proprietary Information Document",
+        compDefault: "$1.00 and other good and valuable consideration, receipt of which is acknowledged"
+      }
+    };
+
+    // Initialize Page
+    window.addEventListener('DOMContentLoaded', () => {
+      // Set today's date in date picker
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('effective_date').value = today;
+
+      // Setup Canvas
+      initSignatureCanvas();
+
+      // Setup live inputs
+      updateContractPreview();
+    });
+
+    // Handle template switching
+    function setContractType(type) {
+      currentContractType = type;
+
+      // Update button visual styles
+      document.querySelectorAll('#template-tabs .tab-btn').forEach(btn => {
+        if (btn.dataset.type === type) {
+          btn.className = "tab-btn active text-left p-2.5 rounded-lg border text-xs font-semibold transition bg-brand-500/10 border-brand-500 text-brand-500 shadow-sm";
+        } else {
+          btn.className = "tab-btn text-left p-2.5 rounded-lg border text-xs font-semibold transition bg-slate-800/60 border-slate-700 text-slate-300 hover:border-slate-500";
+        }
+      });
+
+      // Update dynamic labels & default values
+      const t = contractTemplates[type];
+      document.getElementById('label_party_role').textContent = t.partyRoleLabel;
+      document.getElementById('party_role').value = t.partyRoleDefault;
+      document.getElementById('compensation').value = t.compDefault;
+      document.getElementById('credit_billing').value = t.creditDefault;
+
+      updateContractPreview();
+    }
+
+    // Update real-time document preview
+    function updateContractPreview() {
+      const t = contractTemplates[currentContractType];
+
+      // Form values
+      const title = document.getElementById('film_title').value || "UNTITLED PROJECT";
+      const company = document.getElementById('company_name').value || "PRODUCTION COMPANY";
+      const producerRep = document.getElementById('producer_rep').value || "Marcus Vance, Producer";
+      const counterparty = document.getElementById('counterparty_name').value || "TALENT / LICENSOR";
+      const partyRole = document.getElementById('party_role').value || "Designated Role";
+      const partyAddress = document.getElementById('party_address').value || "Address on file";
+      const dateInput = document.getElementById('effective_date').value;
+      const jurisdiction = document.getElementById('jurisdiction').value || "California, USA";
+      const comp = document.getElementById('compensation').value || "$0.00";
+      const credit = document.getElementById('credit_billing').value || "As Determined by Producer";
+
+      // Formatted date string
+      let formattedDate = "Current Date";
+      if (dateInput) {
+        const d = new Date(dateInput);
+        formattedDate = d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      }
+
+      // Inject to preview elements
+      document.getElementById('doc-contract-title').textContent = t.title;
+      document.getElementById('doc-film-title').textContent = title.toUpperCase();
+      document.getElementById('doc-header-studio').textContent = company.toUpperCase() + " LEGAL CLEARANCE";
+      document.getElementById('doc-date').textContent = formattedDate;
+      document.getElementById('doc-intro-date').textContent = formattedDate;
+      document.getElementById('doc-intro-company').textContent = company;
+      document.getElementById('doc-intro-counterparty').textContent = counterparty;
+      document.getElementById('doc-intro-address').textContent = partyAddress;
+      document.getElementById('doc-intro-party-title').textContent = t.partyTitle;
+      
+      document.getElementById('doc-recital-title').textContent = title.toUpperCase();
+      document.getElementById('doc-recital-counterparty').textContent = counterparty;
+      document.getElementById('doc-recital-counterparty-2').textContent = counterparty;
+
+      document.getElementById('doc-clause-1-content').innerHTML = t.c1;
+      document.getElementById('doc-clause-2-counterparty').textContent = counterparty;
+      document.getElementById('doc-clause-compensation').textContent = comp;
+      document.getElementById('doc-clause-credit').textContent = credit;
+      document.getElementById('doc-clause-jurisdiction').textContent = jurisdiction;
+
+      // Signatures
+      document.getElementById('doc-sig-producer-name').textContent = producerRep.split('(')[0].trim();
+      document.getElementById('doc-sig-company-label').textContent = "PRODUCER / STUDIO: " + company;
+      document.getElementById('doc-sig-producer-title').textContent = "By: " + producerRep;
+      document.getElementById('doc-sig-producer-date').textContent = "Executed: " + formattedDate;
+
+      document.getElementById('doc-sig-counterparty-name').textContent = (t.partyTitle + ": ").toUpperCase() + counterparty;
+      document.getElementById('doc-sig-counterparty-role').textContent = "Role / Scope: " + partyRole;
+      document.getElementById('doc-sig-counterparty-date').textContent = "Executed: " + formattedDate;
+
+      // Checkbox Toggles
+      toggleVisibility('doc-c-workforhire', document.getElementById('clause_work_for_hire').checked);
+      toggleVisibility('doc-c-likeness', document.getElementById('clause_promotional_rights').checked);
+      toggleVisibility('doc-c-injunction', document.getElementById('clause_no_injunction').checked);
+      toggleVisibility('doc-c-confidentiality', document.getElementById('clause_confidentiality').checked);
+      
+      // Watermark & Seal
+      const showWatermark = document.getElementById('show_watermark').checked;
+      document.getElementById('doc-draft-watermark').classList.toggle('hidden', !showWatermark);
+
+      const showSeal = document.getElementById('show_seal').checked;
+      document.getElementById('doc-seal-badge').classList.toggle('hidden', !showSeal);
+
+      // Generate simulated hash
+      const quickHash = "SHA256:" + btoa(title + counterparty + formattedDate).substring(0, 14).toUpperCase();
+      document.getElementById('doc-digital-hash').textContent = quickHash;
+    }
+
+    function toggleVisibility(elemId, isVisible) {
+      const el = document.getElementById(elemId);
+      if (el) {
+        if (isVisible) el.classList.remove('hidden');
+        else el.classList.add('hidden');
+      }
+    }
+
+    // Quick Sample autofiller
+    function loadSampleData() {
+      document.getElementById('film_title').value = "VALKYRIE DAWN: RESURGENCE";
+      document.getElementById('company_name').value = "Paramount Horizon Studios & Blackwood Pictures";
+      document.getElementById('producer_rep').value = "Victoria Sterling (VP of Business & Legal Affairs)";
+      document.getElementById('counterparty_name').value = "Julian Alexander Hayes";
+      document.getElementById('party_role').value = "Co-Lead Role ('Captain Eric Thorne')";
+      document.getElementById('party_contact').value = "legal@hayestalentagency.co.uk";
+      document.getElementById('party_address').value = "14 Berkeley Square, Mayfair, London W1J 6AE, UK";
+      document.getElementById('compensation').value = "$35,000.00 USD + 1.5% Producer Net Profit Participation";
+      document.getElementById('jurisdiction').value = "State of New York, USA";
+      document.getElementById('credit_billing').value = "Above the Title, Shared Card with Lead Cast, 100% size of regular title";
+      
+      applySampleSignature();
+      updateContractPreview();
+
+      // Show toast
+      showNotification("Sample production data loaded successfully!");
+    }
+
+    // Canvas Interactive Signature Handling
+    function initSignatureCanvas() {
+      let drawing = false;
+
+      // Mouse Events
+      canvas.addEventListener('mousedown', (e) => {
+        drawing = true;
+        ctx.beginPath();
+        const pos = getPos(e);
+        ctx.moveTo(pos.x, pos.y);
+      });
+
+      canvas.addEventListener('mousemove', (e) => {
+        if (!drawing) return;
+        ctx.lineWidth = 2.2;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = '#0f172a';
+        const pos = getPos(e);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (drawing) {
+          drawing = false;
+          syncSignatureToDoc();
+        }
+      });
+
+      // Touch Events
+      canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        drawing = true;
+        ctx.beginPath();
+        const pos = getTouchPos(e);
+        ctx.moveTo(pos.x, pos.y);
+      });
+
+      canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (!drawing) return;
+        ctx.lineWidth = 2.2;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = '#0f172a';
+        const pos = getTouchPos(e);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+      });
+
+      canvas.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        if (drawing) {
+          drawing = false;
+          syncSignatureToDoc();
+        }
+      });
+    }
+
+    function getPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+      };
+    }
+
+    function getTouchPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      const touch = e.touches[0];
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      return {
+        x: (touch.clientX - rect.left) * scaleX,
+        y: (touch.clientY - rect.top) * scaleY
+      };
+    }
+
+    function clearSignature() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const sigImg = document.getElementById('doc-sig-counterparty-img');
+      const sigPlaceholder = document.getElementById('doc-sig-placeholder');
+      sigImg.classList.add('hidden');
+      sigImg.src = '';
+      sigPlaceholder.classList.remove('hidden');
+    }
+
+    function syncSignatureToDoc() {
+      const dataUrl = canvas.toDataURL('image/png');
+      const sigImg = document.getElementById('doc-sig-counterparty-img');
+      const sigPlaceholder = document.getElementById('doc-sig-placeholder');
+      
+      sigImg.src = dataUrl;
+      sigImg.classList.remove('hidden');
+      sigPlaceholder.classList.add('hidden');
+    }
+
+    function applySampleSignature() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = '#1e293b';
+
+      // Draw artistic cursive curve signature
+      ctx.beginPath();
+      ctx.moveTo(30, 80);
+      ctx.bezierCurveTo(60, 20, 100, 30, 130, 75);
+      ctx.bezierCurveTo(150, 95, 180, 15, 220, 50);
+      ctx.bezierCurveTo(240, 70, 270, 85, 320, 40);
+      ctx.bezierCurveTo(340, 25, 370, 75, 410, 60);
+      ctx.stroke();
+
+      // Underline flourish
+      ctx.beginPath();
+      ctx.moveTo(50, 95);
+      ctx.quadraticCurveTo(200, 110, 420, 85);
+      ctx.stroke();
+
+      syncSignatureToDoc();
+    }
+
+    // Zoom Controls
+    function zoomPreview(factor) {
+      currentZoom = Math.min(Math.max(currentZoom * factor, 0.5), 1.6);
+      applyZoom();
+    }
+
+    function resetZoom() {
+      currentZoom = 1.0;
+      applyZoom();
+    }
+
+    function applyZoom() {
+      const wrapper = document.getElementById('document-zoom-wrapper');
+      wrapper.style.transform = `scale(${currentZoom})`;
+      document.getElementById('zoom-level').textContent = Math.round(currentZoom * 100) + '%';
+    }
+
+    // PDF Generator using html2pdf.js
+    function generatePDF() {
+      const exportBtn = document.getElementById('btn-export-pdf');
+      const originalText = exportBtn.innerHTML;
+
+      // Loading state
+      exportBtn.disabled = true;
+      exportBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-2"></i> Compiling PDF...`;
+
+      const element = document.getElementById('printable-document');
+      const projectTitle = document.getElementById('film_title').value || "Film_Contract";
+      const party = document.getElementById('counterparty_name').value || "Counterparty";
+      const cleanFilename = `${projectTitle.replace(/[^a-zA-Z0-9]/g, '_')}_${currentContractType}_Signed.pdf`;
+
+      const opt = {
+        margin: [10, 10, 10, 10], // mm
+        filename: cleanFilename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { 
+          scale: 2.5, 
+          useCORS: true,
+          letterRendering: true,
+          logging: false 
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      // Generate
+      html2pdf().set(opt).from(element).save().then(() => {
+        exportBtn.disabled = false;
+        exportBtn.innerHTML = originalText;
+        showNotification(`Official Contract generated & downloaded: ${cleanFilename}`);
+      }).catch((err) => {
+        console.error(err);
+        exportBtn.disabled = false;
+        exportBtn.innerHTML = originalText;
+        alert("There was an error compiling the PDF. You can also use the browser's Print to PDF option.");
+      });
+    }
+
+    // In-app floating toast notification
+    function showNotification(msg) {
+      const existing = document.getElementById('cine-toast');
+      if (existing) existing.remove();
+
+      const toast = document.createElement('div');
+      toast.id = 'cine-toast';
+      toast.className = 'fixed bottom-6 right-6 bg-slate-900 border border-brand-500 text-white px-5 py-3 rounded-xl shadow-2xl z-50 flex items-center space-x-3 transition transform translate-y-0 opacity-100 font-sans text-xs';
+      toast.innerHTML = `
+        <div class="w-6 h-6 rounded-full bg-brand-500 text-slate-950 flex items-center justify-center font-bold text-xs">
+          <i class="fa-solid fa-check"></i>
+        </div>
+        <div>
+          <p class="font-bold text-slate-100">Action Complete</p>
+          <p class="text-slate-400">${msg}</p>
+        </div>
+      `;
+      document.body.appendChild(toast);
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-4');
+        setTimeout(() => toast.remove(), 400);
+      }, 3800);
+    }
+  </script>
+</body>
+</html>
